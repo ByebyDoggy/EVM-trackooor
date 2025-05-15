@@ -8,8 +8,9 @@ import (
 	"os"
 	"sync"
 
-	"github.com/Zellic/EVM-trackooor/shared"
 	"github.com/Zellic/EVM-trackooor/utils"
+
+	"github.com/Zellic/EVM-trackooor/shared"
 
 	"github.com/ethereum/go-ethereum/common"
 )

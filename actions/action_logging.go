@@ -9,9 +9,11 @@ import (
 	"strings"
 	"time"
 
-	discordwebhook "github.com/Zellic/EVM-trackooor/discord-webhook"
-	"github.com/Zellic/EVM-trackooor/shared"
 	"github.com/Zellic/EVM-trackooor/utils"
+
+	discordwebhook "github.com/Zellic/EVM-trackooor/discord-webhook"
+
+	"github.com/Zellic/EVM-trackooor/shared"
 
 	"github.com/ethereum/go-ethereum/core/types"
 )

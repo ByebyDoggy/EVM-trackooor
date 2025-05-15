@@ -137,9 +137,12 @@ func RetrieveERC20Info(tokenAddress common.Address) ERC20Info {
 	var erc20Info ERC20Info
 
 	// check if we already fetch the info. if so, returned the cached info
+	ERC20TokenInfosMutex.RLock()
 	if v, ok := ERC20TokenInfos[tokenAddress]; ok {
+		ERC20TokenInfosMutex.RUnlock()
 		return v
 	}
+	ERC20TokenInfosMutex.RUnlock()
 
 	tokenInstance, err := IERC20Metadata.NewIERC20Metadata(tokenAddress, Client)
 	if err != nil {
@@ -172,7 +175,9 @@ func RetrieveERC20Info(tokenAddress common.Address) ERC20Info {
 	erc20Info.Address = tokenAddress
 
 	// cache to ERC20TokenInfos mapping so we don't retrieve again
+	ERC20TokenInfosMutex.Lock()
 	ERC20TokenInfos[tokenAddress] = erc20Info
+	ERC20TokenInfosMutex.Unlock()
 
 	return erc20Info
 }

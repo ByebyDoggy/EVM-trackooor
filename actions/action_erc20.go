@@ -47,9 +47,11 @@ func (action) InitERC20Events() {
 	}()
 
 	// retrieve info for each ERC20 token
+	shared.ERC20TokenInfosMutex.Lock()
 	for _, contractAddress := range shared.Options.FilterAddresses {
 		shared.ERC20TokenInfos[contractAddress] = shared.RetrieveERC20Info(contractAddress)
 	}
+	shared.ERC20TokenInfosMutex.Unlock()
 
 	addEventSigAction(
 		"Transfer(address,address,uint256)",

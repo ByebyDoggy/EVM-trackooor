@@ -1,7 +1,4 @@
-// Code generated - DO NOT EDIT.
-// This file is a generated binding and any manual changes will be lost.
-
-package multicall2
+package multicall2_test
 
 import (
 	"errors"
@@ -514,43 +511,14 @@ func (_Multicall2 *Multicall2Transactor) TryAggregate(opts *bind.TransactOpts, r
 // DEBUG test
 func (_Multicall2 *Multicall2Transactor) TryAggregate_static(opts *bind.CallOpts, requireSuccess bool, calls []Multicall2Call) ([]Multicall2Result, error) {
 	var out []interface{}
+	var result []Multicall2Result
 	err := _Multicall2.contract.Call(opts, &out, "tryAggregate", requireSuccess, calls)
 
 	if err != nil {
-		return nil, err
-	}
 
-	var res []Multicall2Result
-	for _, v := range out[0].([]struct { 
-		Success bool "json:\"success\"";
-		 ReturnData []uint8 "json:\"returnData\"" 
-		 }) {
-
-		res = append(res, Multicall2Result{
-			v.Success,
-			v.ReturnData,
-		})
 	}
-	return res, nil
+	return abi.ConvertType(out, result).([]Multicall2Result), nil
 }
-
-func (_Multicall2 *Multicall2Transactor) Encode_Multicall2Call(requireSuccess bool, calls []Multicall2Call) ([]byte, error) {
-	abi, err := Multicall2MetaData.GetAbi()
-	if err != nil {
-		return nil, err
-	}
-	encoded, err := abi.Pack("tryAggregate", requireSuccess, calls)
-	if err != nil {
-		return nil, err
-	}
-	return encoded, nil
-}
-
-
-
-// end DEBUG test
-
-
 
 // TryAggregate is a paid mutator transaction binding the contract method 0xbce38bd7.
 //

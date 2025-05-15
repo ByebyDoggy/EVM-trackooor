@@ -23,6 +23,7 @@ type TraceResult struct {
 	Value   *big.Int       `json:"value"`
 	Type    string         `json:"type"`
 	Calls   []TraceResult  `json:"calls"`
+	Error   string         `json:"error"`
 }
 
 func (t *TraceResult) UnmarshalJSON(input []byte) error {
@@ -88,25 +89,28 @@ type Action struct {
 	Input    hexutil.Bytes  `json:"input,omitempty"`
 	Init     hexutil.Bytes  `json:"init,omitempty"`
 	Value    *hexutil.Big   `json:"value"`
+
+	Address       common.Address `json:"address,omitempty"`
+	RefundAddress common.Address `json:"refundAddress,omitempty"`
+	Balance       *hexutil.Big   `json:"balance,omitempty"`
 }
 
 type Result struct {
-	GasUsed string         `json:"gasUsed"`
+	GasUsed *hexutil.Big   `json:"gasUsed"`
 	Output  hexutil.Bytes  `json:"output,omitempty"`
 	Address common.Address `json:"address,omitempty"`
 	Code    hexutil.Bytes  `json:"code,omitempty"`
 }
 
 type Trace struct {
-	Action              Action `json:"action"`
-	BlockHash           string `json:"blockHash"`
-	BlockNumber         int    `json:"blockNumber"`
-	Result              Result `json:"result"`
-	Subtraces           int    `json:"subtraces"`
-	TraceAddress        []int  `json:"traceAddress"`
-	TransactionHash     string `json:"transactionHash"`
-	TransactionPosition int    `json:"transactionPosition"`
-	Type                string `json:"type"`
+	Action              Action        `json:"action"`
+	BlockHash           hexutil.Bytes `json:"blockHash"`
+	BlockNumber         int           `json:"blockNumber"`
+	Result              Result        `json:"result"`
+	Subtraces           int           `json:"subtraces"`
+	TraceAddress        []int         `json:"traceAddress"`
+	TransactionPosition int           `json:"transactionPosition"`
+	Type                string        `json:"type"`
 }
 
 func Trace_transaction(txHash common.Hash) []Trace {
@@ -130,14 +134,29 @@ func Trace_transaction(txHash common.Hash) []Trace {
 	return result
 }
 
+// for Trace_replayBlockTransactions
+type BlockTrace_Replay struct {
+	Output          hexutil.Bytes `json:"output"`
+	StateDiff       any           `json:"stateDiff"`
+	Traces          []Trace       `json:"trace"`
+	TransactionHash hexutil.Bytes `json:"transactionHash"`
+}
+
+// for Trace_block
 type BlockTrace struct {
-	Output    hexutil.Bytes `json:"output"`
-	StateDiff any           `json:"stateDiff"`
-	Traces    []Trace       `json:"trace"`
+	Action              Action   `json:"action"`
+	BlockHash           string   `json:"blockHash"`
+	BlockNumber         *big.Int `json:"blockNumber"`
+	Error               string   `json:"error"` // empty if no error
+	Result              Result   `json:"result"`
+	TraceAddress        []int    `json:"traceAddress"`
+	TransactionHash     string   `json:"transactionHash"`
+	TransactionPosition *big.Int `json:"transactionPosition"`
+	Type                string   `json:"type"`
 }
 
 // traceType is one or more of "trace", "stateDiff"
-func Trace_replayBlockTransactions(blockNum uint64, traceType []string) ([]BlockTrace, error) {
+func Trace_replayBlockTransactions(blockNum uint64, traceType []string) ([]BlockTrace_Replay, error) {
 
 	var raw json.RawMessage
 	Client.Client().CallContext(
@@ -147,13 +166,30 @@ func Trace_replayBlockTransactions(blockNum uint64, traceType []string) ([]Block
 		blockNum, traceType, // params
 	)
 
-	// fmt.Printf("raw: %v\n", string(raw))
-
-	var result []BlockTrace
+	var result []BlockTrace_Replay
 	if err := json.Unmarshal([]byte(raw), &result); err != nil {
 		// fmt.Printf("Trace_replayBlockTransactions err blockNum: %v err: %v raw: %v\n", blockNum, err, raw)
 		// return nil
 		return nil, fmt.Errorf("Trace_replayBlockTransactions err blockNum: %v err: %v raw: %v", blockNum, err, raw)
+	}
+
+	return result, nil
+}
+
+func Trace_block(blockNum uint64) ([]BlockTrace, error) {
+
+	var raw json.RawMessage
+	Client.Client().CallContext(
+		context.Background(),
+		&raw,
+		"trace_block",
+		blockNum,
+	)
+
+	var result []BlockTrace
+	if err := json.Unmarshal([]byte(raw), &result); err != nil {
+		// return nil, fmt.Errorf("Trace_block err blockNum: %v err: %v raw: %v", blockNum, err, raw)
+		return nil, fmt.Errorf("Trace_block err blockNum: %v err: %v", blockNum, err)
 	}
 
 	return result, nil
@@ -243,7 +279,8 @@ func Trace_call(callParams CallParams, traceType []string) (TraceCallResult, err
 	if err := json.Unmarshal([]byte(raw), &result); err != nil {
 		// fmt.Printf("Trace_replayBlockTransactions err blockNum: %v err: %v raw: %v\n", blockNum, err, raw)
 		// return nil
-		return TraceCallResult{}, fmt.Errorf("Trace_call err: %v params: %v traceType: %v", err, callParams, traceType)
+		// return TraceCallResult{}, fmt.Errorf("Trace_call err: %v params: %v traceType: %v", err, callParams, traceType)
+		return TraceCallResult{}, fmt.Errorf("Trace_call err: %v traceType: %v", err, traceType)
 	}
 
 	return result, nil

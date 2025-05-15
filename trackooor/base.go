@@ -2,9 +2,10 @@ package trackooor
 
 import (
 	"fmt"
+	"log/slog"
+
 	"github.com/Zellic/EVM-trackooor/database"
 	"github.com/Zellic/EVM-trackooor/shared"
-	"log/slog"
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"

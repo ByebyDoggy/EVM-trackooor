@@ -101,7 +101,6 @@ func loadProxyUpgradesConfig(customOptions map[string]interface{}) {
 		}
 	} else {
 		proxyUpgradesLog.Fatalf("Please specify discord webhook URL \"webhook-url\"!")
-
 	}
 
 	proxyUpgradesLog.Printf("Set threshold to $%v USD\n", proxyUpgradesConfig.thresholdUSD)

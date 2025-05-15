@@ -31,6 +31,7 @@ var FuncSigs map[string]interface{}  // from data file, maps hex string (func se
 var Blockscanners map[string]interface{}
 
 // ERC20 data
+var ERC20TokenInfosMutex sync.RWMutex
 var ERC20TokenInfos map[common.Address]ERC20Info
 
 // cached data
@@ -60,6 +61,9 @@ type TrackooorOptions struct {
 
 	ListenerOptions   ListenerOptions
 	HistoricalOptions HistoricalOptions
+
+	// whether or not to try getting block by number first, rather than by hash
+	GetBlockByNumber bool
 
 	IsL2Chain bool // will account for invalid tx types
 }

@@ -13,8 +13,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Zellic/EVM-trackooor/shared"
 	"github.com/Zellic/EVM-trackooor/utils"
+
+	"github.com/Zellic/EVM-trackooor/shared"
 
 	"github.com/Zellic/EVM-trackooor/contracts/uniswapPool"
 
@@ -68,11 +69,11 @@ type v3Swap struct {
 	// event data
 	Sender       common.Address `json:"sender"`
 	Recipient    common.Address `json:"recipient"`
-	Amount0      *big.Int       `json:"amount0"`
-	Amount1      *big.Int       `json:"amount1"`
-	SqrtPriceX96 *big.Int       `json:"sqrt-price-x96"`
-	Liquidity    *big.Int       `json:"liquidity"`
-	Tick         *big.Int       `json:"tick"`
+	Amount0      utils.BigInt   `json:"amount0"`
+	Amount1      utils.BigInt   `json:"amount1"`
+	SqrtPriceX96 utils.BigInt   `json:"sqrt-price-x96"`
+	Liquidity    utils.BigInt   `json:"liquidity"`
+	Tick         utils.BigInt   `json:"tick"`
 	// other data
 	Timestamp time.Time `json:"timestamp"`
 }
@@ -80,10 +81,10 @@ type v3Swap struct {
 type v3PoolInfo struct {
 	Token0                 common.Address `json:"token0"`                    // token0 address
 	Token1                 common.Address `json:"token1"`                    // token1 address
-	Token0Volume           *big.Int       `json:"token0-volume"`             // volume of token0
-	Token1Volume           *big.Int       `json:"token1-volume"`             // volume of token1
-	Token0PrevPeriodVolume *big.Int       `json:"token0-prev-period-volume"` // volume of token0 in the prev X hour period
-	Token1PrevPeriodVolume *big.Int       `json:"token1-prev-period-volume"` // volume of token1 in the prev X hour period
+	Token0Volume           utils.BigInt   `json:"token0-volume"`             // volume of token0
+	Token1Volume           utils.BigInt   `json:"token1-volume"`             // volume of token1
+	Token0PrevPeriodVolume utils.BigInt   `json:"token0-prev-period-volume"` // volume of token0 in the prev X hour period
+	Token1PrevPeriodVolume utils.BigInt   `json:"token1-prev-period-volume"` // volume of token1 in the prev X hour period
 
 	LastAlerted time.Time `json:"last-alerted"` // last time webhook msg was sent
 
@@ -348,11 +349,11 @@ func handleV3PoolSwapEvent(p ActionEventData) {
 	swapData := v3Swap{
 		Sender:       p.DecodedTopics["sender"].(common.Address),
 		Recipient:    p.DecodedTopics["recipient"].(common.Address),
-		Amount0:      p.DecodedData["amount0"].(*big.Int),
-		Amount1:      p.DecodedData["amount1"].(*big.Int),
-		SqrtPriceX96: p.DecodedData["sqrtPriceX96"].(*big.Int),
-		Liquidity:    p.DecodedData["liquidity"].(*big.Int),
-		Tick:         p.DecodedData["tick"].(*big.Int),
+		Amount0:      utils.BigInt{Int: p.DecodedData["amount0"].(*big.Int)},
+		Amount1:      utils.BigInt{Int: p.DecodedData["amount1"].(*big.Int)},
+		SqrtPriceX96: utils.BigInt{Int: p.DecodedData["sqrtPriceX96"].(*big.Int)},
+		Liquidity:    utils.BigInt{Int: p.DecodedData["liquidity"].(*big.Int)},
+		Tick:         utils.BigInt{Int: p.DecodedData["tick"].(*big.Int)},
 		Timestamp:    time.Now(),
 	}
 
@@ -393,8 +394,8 @@ func updateV3Volume(pool common.Address) {
 		// check if swap within timeframe
 		swapTime := swap.Timestamp
 		// swapTime + volumeDuration > now
-		token0AbsAmount := big.NewInt(0).Abs(swap.Amount0)
-		token1AbsAmount := big.NewInt(0).Abs(swap.Amount1)
+		token0AbsAmount := big.NewInt(0).Abs(swap.Amount0.Int)
+		token1AbsAmount := big.NewInt(0).Abs(swap.Amount1.Int)
 		if swapTime.Add(uniswapV3Options.v3VolumeDuration).After(now) {
 			// get amount of token0 & token1 traded and add to volume
 			token0Volume.Add(token0Volume, token0AbsAmount)
@@ -416,10 +417,10 @@ func updateV3Volume(pool common.Address) {
 	}
 
 	// set volume and swap data
-	poolData.Token0Volume = token0Volume
-	poolData.Token1Volume = token1Volume
-	poolData.Token0PrevPeriodVolume = token0PrevVolume
-	poolData.Token1PrevPeriodVolume = token1PrevVolume
+	poolData.Token0Volume = utils.BigInt{Int: token0Volume}
+	poolData.Token1Volume = utils.BigInt{Int: token1Volume}
+	poolData.Token0PrevPeriodVolume = utils.BigInt{Int: token0PrevVolume}
+	poolData.Token1PrevPeriodVolume = utils.BigInt{Int: token1PrevVolume}
 	poolData.Swaps = swaps
 
 	// fmt.Printf("token0Volume: %v\n", token0Volume)
@@ -440,7 +441,7 @@ func checkV3Volume(pool common.Address) {
 	// check token0
 	if slices.Contains([]common.Address{USDT, USDC, WETH}, poolData.Token0) {
 		updateTokenInfo(poolData.Token0)
-		token0Alerted := alertV3Volume(pool, poolData.Token0, poolData.Token0Volume, poolData.Token0PrevPeriodVolume)
+		token0Alerted := alertV3Volume(pool, poolData.Token0, poolData.Token0Volume.Int, poolData.Token0PrevPeriodVolume.Int)
 		if token0Alerted {
 			uniswapV3Log.Printf("V3 Pool %v alerted for token0 (shortcut price)\n", pool)
 		}
@@ -449,7 +450,7 @@ func checkV3Volume(pool common.Address) {
 	// check token1
 	if slices.Contains([]common.Address{USDT, USDC, WETH}, poolData.Token1) {
 		updateTokenInfo(poolData.Token1)
-		token1Alerted := alertV3Volume(pool, poolData.Token1, poolData.Token1Volume, poolData.Token1PrevPeriodVolume)
+		token1Alerted := alertV3Volume(pool, poolData.Token1, poolData.Token1Volume.Int, poolData.Token1PrevPeriodVolume.Int)
 		if token1Alerted {
 			uniswapV3Log.Printf("V3 Pool %v alerted for token1 (shortcut price)\n", pool)
 		}
@@ -464,13 +465,13 @@ func checkV3Volume(pool common.Address) {
 
 	// send alerts to webhook (if volume > threshold)
 	// token0
-	token0Alerted := alertV3Volume(pool, poolData.Token0, poolData.Token0Volume, poolData.Token0PrevPeriodVolume)
+	token0Alerted := alertV3Volume(pool, poolData.Token0, poolData.Token0Volume.Int, poolData.Token0PrevPeriodVolume.Int)
 	if token0Alerted {
 		uniswapV3Log.Printf("V3 Pool %v alerted for token0\n", pool)
 		return
 	}
 	// token1
-	token1Alerted := alertV3Volume(pool, poolData.Token1, poolData.Token1Volume, poolData.Token1PrevPeriodVolume)
+	token1Alerted := alertV3Volume(pool, poolData.Token1, poolData.Token1Volume.Int, poolData.Token1PrevPeriodVolume.Int)
 	if token1Alerted {
 		uniswapV3Log.Printf("V3 Pool %v alerted for token1\n", pool)
 		return
@@ -696,13 +697,13 @@ func getTokenInfo(tokenAddress common.Address) (TokenInfo, error) {
 		poolAddr := wethUsdcV3Pool // WETH USDC uniswap v3 pool
 		wethUsdcPool, err := uniswapPool.NewUniswapV3Pool(poolAddr, shared.Client)
 		if err != nil {
-			uniswapV3Log.Printf("Error: failed to get WETH price (usdc) from v3 pool")
+			uniswapV3Log.Printf("Error: failed to get WETH price (usdc) from v3 pool\n")
 			break
 		}
 		slot0, err := wethUsdcPool.Slot0(nil)
 		sqrtPriceX96 := slot0.SqrtPriceX96
 		if err != nil {
-			uniswapV3Log.Printf("Error: failed to get WETH price (usdc) from v3 pool")
+			uniswapV3Log.Printf("Error: failed to get WETH price (usdc) from v3 pool\n")
 			break
 		}
 		sqrtPriceX96Float := big.NewFloat(0).SetInt(sqrtPriceX96)

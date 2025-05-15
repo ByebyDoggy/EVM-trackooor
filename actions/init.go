@@ -11,8 +11,9 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/Zellic/EVM-trackooor/shared"
 	"github.com/Zellic/EVM-trackooor/utils"
+
+	"github.com/Zellic/EVM-trackooor/shared"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"

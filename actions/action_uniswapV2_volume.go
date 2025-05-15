@@ -11,8 +11,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Zellic/EVM-trackooor/shared"
 	"github.com/Zellic/EVM-trackooor/utils"
+
+	"github.com/Zellic/EVM-trackooor/shared"
 
 	"github.com/ethereum/go-ethereum/common"
 )
@@ -22,10 +23,10 @@ import (
 type v2Swap struct {
 	// event data
 	Sender     common.Address `json:"sender"`
-	Amount0In  *big.Int       `json:"amount0In"`
-	Amount1In  *big.Int       `json:"amount1In"`
-	Amount0Out *big.Int       `json:"amount0Out"`
-	Amount1Out *big.Int       `json:"amount1Out"`
+	Amount0In  utils.BigInt   `json:"amount0In"`
+	Amount1In  utils.BigInt   `json:"amount1In"`
+	Amount0Out utils.BigInt   `json:"amount0Out"`
+	Amount1Out utils.BigInt   `json:"amount1Out"`
 	To         common.Address `json:"to"`
 	// other data
 	Timestamp time.Time `json:"timestamp"`
@@ -34,10 +35,10 @@ type v2Swap struct {
 type v2PairInfo struct {
 	Token0                 common.Address `json:"token0"`                    // token0 address
 	Token1                 common.Address `json:"token1"`                    // token1 address
-	Token0Volume           *big.Int       `json:"token0-volume"`             // volume of token0
-	Token1Volume           *big.Int       `json:"token1-volume"`             // volume of token1
-	Token0PrevPeriodVolume *big.Int       `json:"token0-prev-period-volume"` // volume of token0 in the prev X hour period
-	Token1PrevPeriodVolume *big.Int       `json:"token1-prev-period-volume"` // volume of token1 in the prev X hour period
+	Token0Volume           utils.BigInt   `json:"token0-volume"`             // volume of token0
+	Token1Volume           utils.BigInt   `json:"token1-volume"`             // volume of token1
+	Token0PrevPeriodVolume utils.BigInt   `json:"token0-prev-period-volume"` // volume of token0 in the prev X hour period
+	Token1PrevPeriodVolume utils.BigInt   `json:"token1-prev-period-volume"` // volume of token1 in the prev X hour period
 
 	LastAlerted time.Time `json:"last-alerted"` // last time webhook msg was sent
 
@@ -288,10 +289,10 @@ func handleV2PairSwapEvent(p ActionEventData) {
 
 	swapData := v2Swap{
 		Sender:     p.DecodedTopics["sender"].(common.Address),
-		Amount0In:  p.DecodedData["amount0In"].(*big.Int),
-		Amount1In:  p.DecodedData["amount1In"].(*big.Int),
-		Amount0Out: p.DecodedData["amount0Out"].(*big.Int),
-		Amount1Out: p.DecodedData["amount1Out"].(*big.Int),
+		Amount0In:  utils.BigInt{Int: p.DecodedData["amount0In"].(*big.Int)},
+		Amount1In:  utils.BigInt{Int: p.DecodedData["amount1In"].(*big.Int)},
+		Amount0Out: utils.BigInt{Int: p.DecodedData["amount0Out"].(*big.Int)},
+		Amount1Out: utils.BigInt{Int: p.DecodedData["amount1Out"].(*big.Int)},
 		To:         p.DecodedTopics["to"].(common.Address),
 	}
 
@@ -335,14 +336,14 @@ func updateV2Volume(pair common.Address) {
 		if swapTime.Add(uniswapV2Options.v2VolumeDuration).After(now) {
 			// add amounts of token0 traded
 			// token0Volume += Amount0In + Amount0Out
-			token0Volume.Add(token0Volume, big.NewInt(0).Add(swap.Amount0In, swap.Amount0Out))
+			token0Volume.Add(token0Volume, big.NewInt(0).Add(swap.Amount0In.Int, swap.Amount0Out.Int))
 			// add amounts of token1 traded
 			// token1Volume += Amount1In + Amount1Out
-			token1Volume.Add(token1Volume, big.NewInt(0).Add(swap.Amount1In, swap.Amount1Out))
+			token1Volume.Add(token1Volume, big.NewInt(0).Add(swap.Amount1In.Int, swap.Amount1Out.Int))
 		} else if swapTime.Add(uniswapV2Options.v2VolumeDuration * 2).After(now) {
 			// time within previous period (swapTime + volumeDuration*2 > now)
-			token0PrevVolume.Add(token0PrevVolume, big.NewInt(0).Add(swap.Amount0In, swap.Amount0Out))
-			token1PrevVolume.Add(token1PrevVolume, big.NewInt(0).Add(swap.Amount1In, swap.Amount1Out))
+			token0PrevVolume.Add(token0PrevVolume, big.NewInt(0).Add(swap.Amount0In.Int, swap.Amount0Out.Int))
+			token1PrevVolume.Add(token1PrevVolume, big.NewInt(0).Add(swap.Amount1In.Int, swap.Amount1Out.Int))
 		} else {
 			// swap too old, remove
 			removing = append(removing, ind)
@@ -356,10 +357,10 @@ func updateV2Volume(pair common.Address) {
 	}
 
 	// set volume and swap data
-	pairData.Token0Volume = token0Volume
-	pairData.Token1Volume = token1Volume
-	pairData.Token0PrevPeriodVolume = token0PrevVolume
-	pairData.Token1PrevPeriodVolume = token1PrevVolume
+	pairData.Token0Volume = utils.BigInt{Int: token0Volume}
+	pairData.Token1Volume = utils.BigInt{Int: token1Volume}
+	pairData.Token0PrevPeriodVolume = utils.BigInt{Int: token0PrevVolume}
+	pairData.Token1PrevPeriodVolume = utils.BigInt{Int: token1PrevVolume}
 	pairData.Swaps = swaps
 
 	// assign to map
@@ -377,7 +378,7 @@ func checkV2Volume(pair common.Address) {
 	// check token0
 	if slices.Contains([]common.Address{USDT, USDC, WETH}, pairData.Token0) {
 		updateTokenInfo(pairData.Token0)
-		token0Alerted := alertV2Volume(pair, pairData.Token0, pairData.Token0Volume, pairData.Token0PrevPeriodVolume)
+		token0Alerted := alertV2Volume(pair, pairData.Token0, pairData.Token0Volume.Int, pairData.Token0PrevPeriodVolume.Int)
 		if token0Alerted {
 			uniswapV2Log.Printf("V2 Pair %v alerted for token0 (shortcut price)\n", pair)
 		}
@@ -386,7 +387,7 @@ func checkV2Volume(pair common.Address) {
 	// check token1
 	if slices.Contains([]common.Address{USDT, USDC, WETH}, pairData.Token1) {
 		updateTokenInfo(pairData.Token1)
-		token1Alerted := alertV2Volume(pair, pairData.Token1, pairData.Token1Volume, pairData.Token1PrevPeriodVolume)
+		token1Alerted := alertV2Volume(pair, pairData.Token1, pairData.Token1Volume.Int, pairData.Token1PrevPeriodVolume.Int)
 		if token1Alerted {
 			uniswapV2Log.Printf("V2 Pair %v alerted for token1 (shortcut price)\n", pair)
 		}
@@ -401,13 +402,13 @@ func checkV2Volume(pair common.Address) {
 
 	// send alerts to webhook (if volume > threshold)
 	// token0
-	token0Alerted := alertV2Volume(pair, pairData.Token0, pairData.Token0Volume, pairData.Token0PrevPeriodVolume)
+	token0Alerted := alertV2Volume(pair, pairData.Token0, pairData.Token0Volume.Int, pairData.Token0PrevPeriodVolume.Int)
 	if token0Alerted {
 		uniswapV2Log.Printf("V2 Pair %v alerted for token0\n", pair)
 		return
 	}
 	// token1
-	token1Alerted := alertV2Volume(pair, pairData.Token1, pairData.Token1Volume, pairData.Token1PrevPeriodVolume)
+	token1Alerted := alertV2Volume(pair, pairData.Token1, pairData.Token1Volume.Int, pairData.Token1PrevPeriodVolume.Int)
 	if token1Alerted {
 		uniswapV2Log.Printf("V2 Pair %v alerted for token1\n", pair)
 		return

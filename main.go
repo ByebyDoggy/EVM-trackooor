@@ -2,12 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
-	"log"
-	"log/slog"
-	"math/big"
-	"os"
-	"strings"
 
 	"github.com/Zellic/EVM-trackooor/actions"
 	"github.com/Zellic/EVM-trackooor/database"
@@ -15,6 +9,13 @@ import (
 	"github.com/Zellic/EVM-trackooor/trackooor"
 
 	"github.com/Zellic/EVM-trackooor/utils"
+
+	"fmt"
+	"log"
+	"log/slog"
+	"math/big"
+	"os"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -35,6 +36,7 @@ var configFilepath string // path to config file instead of specifying params on
 var AutoFetchABI bool
 var ContinueToRealtime bool
 var PendingBlocks bool
+var GetBlockByNumber bool
 
 // historical
 var fromBlockStr string
@@ -380,6 +382,8 @@ func setListenerOptions() {
 		}
 		options.HistoricalOptions.StepBlocks = stepBlocks
 	}
+
+	options.GetBlockByNumber = GetBlockByNumber
 }
 
 func loadConfigFile(filename string) {
@@ -519,6 +523,7 @@ func init() {
 
 	// specify config file with options, instead of providing through command line
 	trackCmd.PersistentFlags().StringVar(&configFilepath, "config", "", "Path the config file instead of specifying settings through command line")
+	trackCmd.PersistentFlags().BoolVar(&GetBlockByNumber, "get-block-by-number", false, "Whether to try getting blocks by number first, rather than by hash.")
 
 	// data
 
