@@ -116,7 +116,7 @@ func ProcessHistoricalBlocks(fromBlock *big.Int, toBlock *big.Int) {
 					tmpCurBlock := big.NewInt(0).Set(currentBlock)
 					blockNumWaitGroup.Done()
 
-					block, err := shared.Client.BlockByNumber(context.Background(), tmpCurBlock)
+					block, err := shared.SafeGetBlockByNumber(tmpCurBlock)
 					if err != nil {
 						log.Fatalf("Could not retrieve block %v, err: %v\n", tmpCurBlock, err)
 					}
@@ -142,7 +142,7 @@ func ProcessHistoricalBlocks(fromBlock *big.Int, toBlock *big.Int) {
 			for currentBlock := fromBlock; currentBlock.Cmp(toBlock) >= 0; currentBlock.Sub(currentBlock, big.NewInt(1)) {
 				mainBar.Describe(fmt.Sprintf("Block %v", currentBlock))
 
-				block, err := shared.Client.BlockByNumber(context.Background(), currentBlock)
+				block, err := shared.SafeGetBlockByNumber(currentBlock)
 				if err != nil {
 					log.Fatalf("Could not retrieve block %v, err: %v\n", currentBlock, err)
 				}
@@ -156,7 +156,7 @@ func ProcessHistoricalBlocks(fromBlock *big.Int, toBlock *big.Int) {
 			for currentBlock := fromBlock; currentBlock.Cmp(toBlock) <= 0; currentBlock.Add(currentBlock, big.NewInt(1)) {
 				mainBar.Describe(fmt.Sprintf("Block %v", currentBlock))
 
-				block, err := shared.Client.BlockByNumber(context.Background(), currentBlock)
+				block, err := shared.SafeGetBlockByNumber(currentBlock)
 				if err != nil {
 					log.Fatalf("Could not retrieve block %v, err: %v\n", currentBlock, err)
 				}

@@ -5,9 +5,10 @@ import (
 
 	"github.com/Zellic/EVM-trackooor/actions"
 	"github.com/Zellic/EVM-trackooor/database"
+	"github.com/Zellic/EVM-trackooor/market"
+	"github.com/Zellic/EVM-trackooor/notify"
 	"github.com/Zellic/EVM-trackooor/shared"
 	"github.com/Zellic/EVM-trackooor/trackooor"
-
 	"github.com/Zellic/EVM-trackooor/utils"
 
 	"fmt"
@@ -407,6 +408,26 @@ func loadConfigFile(filename string) {
 		log.Fatalf("Missing RPC URL in config file %v", filename)
 	}
 
+	if v, ok := configOptions["webhook_url"]; ok {
+		options.WebHookURL = v.(string)
+		shared.EnableWebhookNotifications = true
+	} else {
+		shared.EnableWebhookNotifications = false
+	}
+
+	if v, ok := configOptions["email_address"]; ok {
+		options.EmailAdress = v.(string)
+		shared.EnableEmailNotifications = true
+	} else {
+		shared.EnableEmailNotifications = false
+	}
+
+	if v, ok := configOptions["coinmarket_url"]; ok {
+		market.BaseCoinMarketURL = v.(string)
+	} else {
+		log.Fatalf("Missing coinmarket URL in config file %v", filename)
+	}
+
 	// load actions
 	// init maps
 	options.AddressProperties = make(map[common.Address]map[string]interface{})
@@ -579,6 +600,8 @@ func init() {
 
 	dataCmd.AddCommand(addEventsCmd)
 	dataCmd.AddCommand(addFuncSigCmd)
+
+	notify.InitNotify()
 }
 
 func executeArgs() {

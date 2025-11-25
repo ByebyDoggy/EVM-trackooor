@@ -220,9 +220,9 @@ func TraceBlock(blockNum uint64) {
 	} else {
 		deploymentScanLog.Printf("Unable to use Trace_block for block %v\n", blockNum)
 		deploymentScanLog.Printf("Falling back to debug_traceTransaction\n")
-		block, err := shared.Client.BlockByNumber(context.Background(), big.NewInt(int64(blockNum)))
+		block, err := shared.SafeGetBlockByNumber(big.NewInt(int64(blockNum)))
 		if err != nil {
-			deploymentScanLog.Printf("BlockByNumber err for block %v, skipping block\n", blockNum)
+			deploymentScanLog.Printf("SafeGetBlockByNumber err for block %v, skipping block\n", blockNum)
 			return
 		}
 		for _, tx := range block.Transactions() {

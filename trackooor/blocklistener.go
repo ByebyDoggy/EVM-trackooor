@@ -109,46 +109,12 @@ func HandleHeader(header *types.Header) {
 	}
 
 	shared.Infof(slog.Default(), "Getting block by hash %v", header.Hash())
-
-	if shared.Options.IsL2Chain {
-		// try getting block by hash, otherwise by number
-		blockHexNum := "0x" + header.Number.Text(16)
-		block, err := shared.GetL2BlockByHexNumber(blockHexNum)
-		if err != nil {
-			shared.Warnf(slog.Default(), "Failed to get block by hex num: %v, ignoring block, err: %v", blockHexNum, err)
-			return
-		}
-		handleBlock(block)
-	} else {
-		var block *types.Block
-		var err error
-
-		if shared.Options.GetBlockByNumber {
-			// try getting block by hash, otherwise by number
-			block, err = shared.Client.BlockByNumber(context.Background(), header.Number)
-			if err != nil {
-				shared.Warnf(slog.Default(), "Failed to get block by number %v, getting by hash %v, err: %v", header.Hash(), header.Number, err)
-				block, err = shared.Client.BlockByHash(context.Background(), header.Hash())
-				if err != nil {
-					shared.Warnf(slog.Default(), "Failed to get block by hash %v, ignoring block, err: %v", header.Number, err)
-					return
-				}
-			}
-		} else {
-			// try getting block by hash, otherwise by number
-			block, err = shared.Client.BlockByHash(context.Background(), header.Hash())
-			if err != nil {
-				shared.Warnf(slog.Default(), "Failed to get block by hash %v, getting by number %v, err: %v", header.Hash(), header.Number, err)
-				block, err = shared.Client.BlockByNumber(context.Background(), header.Number)
-				if err != nil {
-					shared.Warnf(slog.Default(), "Failed to get block by number %v, ignoring block, err: %v", header.Number, err)
-					return
-				}
-			}
-		}
-
-		handleBlock(block)
+	block, err := shared.SafeGetBlockByNumber(header.Number)
+	if err != nil {
+		shared.Warnf(slog.Default(), "Failed to get block by number %v, ignoring block, err: %v", header.Number, err)
+		return
 	}
+	handleBlock(block)
 }
 
 func handleBlock(block *types.Block) {

@@ -177,3 +177,24 @@ func ShortenHash(hsh common.Hash) string {
 	hshHex := hsh.Hex()
 	return hshHex[:2+10] + "..." + hshHex[len(hshHex)-10:]
 }
+
+// formats n given its decimal places and returns a float64 value.
+func FormatDecimalsToFloat(n *big.Int, decimals uint8) float64 {
+	if decimals == 0 || n == nil {
+		if n == nil {
+			return 0.0
+		}
+		// Convert big.Int to float64
+		f, _ := new(big.Float).SetInt(n).Float64()
+		return f
+	}
+
+	// Create a divisor of 10^decimals
+	divisor := new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(decimals)), nil)
+
+	// Convert to float and divide by 10^decimals
+	nFloat, _ := new(big.Float).SetInt(n).Float64()
+	divisorFloat, _ := new(big.Float).SetInt(divisor).Float64()
+
+	return nFloat / divisorFloat
+}

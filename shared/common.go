@@ -20,6 +20,10 @@ import (
 var Client *ethclient.Client
 var ChainID *big.Int
 
+// notify config
+var EnableWebhookNotifications bool
+var EnableEmailNotifications bool
+
 // command args (to be set by main.go)
 var RpcURL string
 var Verbose bool
@@ -49,6 +53,8 @@ var BlockTrackingRequired bool
 // config options for trackooors
 type TrackooorOptions struct {
 	RpcURL            string
+	WebHookURL        string
+	EmailAdress       string
 	FilterAddresses   []common.Address // global list of addresses to filter for
 	FilterEventTopics [][]common.Hash  // global list of event topics to filter for
 

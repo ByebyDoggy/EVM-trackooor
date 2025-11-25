@@ -1,0 +1,33 @@
+services:
+  evm-trackooor:
+    build: .
+    container_name: evm-trackooor
+    volumes:
+      # 挂载配置文件，允许在容器外修改配置
+      - ./config.json:/root/config.json
+      # 挂载数据目录
+      - ./data/:/root/data/
+      # 挂载输出目录
+      - ./output/:/root/output/
+    # 启动命令留在这里自定义
+    command: ["track", "realtime", "events", "--config", "config.json"]
+    # 如果需要后台运行，可以取消下面的注释
+    # restart: unless-stopped
+    
+    # 环境变量（如果需要）
+    environment:
+      - GIN_MODE=release
+      # 可以在这里添加其他环境变量
+      
+    # 如果需要网络访问权限
+    networks:
+      - evm-network
+
+# 定义网络
+networks:
+  evm-network:
+    driver: bridge
+
+# 如果需要持久化数据，可以添加volumes
+# volumes:
+#   evm-data:

@@ -520,9 +520,9 @@ func initscanHandleBlock(p ActionBlockData) {
 
 		initscanLog.Printf("Unable to use trace_replayBlockTransactions for block %v\n", blockNum)
 		initscanLog.Printf("Falling back to debug_traceTransaction\n")
-		block, err := shared.Client.BlockByNumber(context.Background(), blockNumBig)
+		block, err := shared.SafeGetBlockByNumber(blockNumBig)
 		if err != nil {
-			initscanLog.Printf("BlockByNumber err for block %v, skipping block\n", blockNum)
+			initscanLog.Printf("SafeGetBlockByNumber err for block %v, skipping block\n", blockNum)
 			return
 		}
 		for _, tx := range block.Transactions() {
