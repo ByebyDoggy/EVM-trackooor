@@ -6,6 +6,7 @@ require (
 	github.com/dominikbraun/graph v0.23.0
 	github.com/ethereum/go-ethereum v1.16.7
 	github.com/jackc/pgx/v5 v5.7.4
+	github.com/machinebox/graphql v0.2.2
 	github.com/spf13/cobra v1.9.1
 )
 
@@ -20,6 +21,8 @@ require (
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
 	github.com/jackc/puddle/v2 v2.2.2 // indirect
+	github.com/matryer/is v1.4.1 // indirect
+	github.com/pkg/errors v0.9.1 // indirect
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
 	golang.org/x/text v0.24.0 // indirect
 )

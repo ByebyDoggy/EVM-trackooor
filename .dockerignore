@@ -22,7 +22,7 @@ go.work
 
 # config files
 /config*.json
-
+test
 # action data files
 /*_data.json
 

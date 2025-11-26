@@ -6,19 +6,16 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
+// TokenPriceInUSD 获取代币的美元价格
 func TokenPriceInUSD(token common.Address) (float64, error) {
-	coinInfos, err := GetCoinByContract(token.Hex())
+	price, err := GetTokenPriceByContract(token.Hex())
 	if err != nil {
 		return 0, err
 	}
-	if len(coinInfos) == 0 {
-		return 0, fmt.Errorf("no coin info found")
+
+	if price <= 0 {
+		return 0, fmt.Errorf("invalid price received: %f", price)
 	}
-	for _, coinInfo := range coinInfos {
-		if coinInfo.SupplyInfo == nil || coinInfo.SupplyInfo.CachedPrice == nil {
-			continue
-		}
-		return *coinInfo.SupplyInfo.CachedPrice, nil
-	}
-	return 0, fmt.Errorf("no cached price found")
+
+	return price, nil
 }
