@@ -28,7 +28,7 @@ func handleEventsFromBlock(block *types.Block, contracts []common.Address) {
 		Addresses: contracts,
 		Topics:    shared.Options.FilterEventTopics,
 	}
-	logs, err := shared.Client.FilterLogs(context.Background(), query)
+	logs, err := shared.FilterLogs(context.Background(), query)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -131,7 +131,7 @@ func handleBlock(block *types.Block) {
 		shared.Infof(slog.Default(), "No event actions enabled - not handling")
 	} else {
 		actions.ActionMapMutex.RUnlock()
-		handleEventsFromBlock(block, shared.Options.FilterAddresses)
+		go handleEventsFromBlock(block, shared.Options.FilterAddresses)
 	}
 
 	// do tx post processing

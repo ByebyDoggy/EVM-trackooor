@@ -36,7 +36,7 @@ func SetupListener(options shared.TrackooorOptions) {
 	shared.LoadFromJson("./data/func_sigs.json", &shared.FuncSigs)
 
 	shared.Client, shared.ChainID = shared.ConnectToRPC(options.RpcURL)
-
+	shared.NewWrappedClient(options.HttpRPCURLs)
 	if shared.Options.AutoFetchABI {
 		addContractsEventAbi(shared.Options.FilterAddresses)
 	}

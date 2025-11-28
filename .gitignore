@@ -34,3 +34,4 @@ go.work
 .DS_Store
 .idea
 test
+config.json

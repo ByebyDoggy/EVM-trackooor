@@ -29,7 +29,6 @@ WORKDIR /root/
 COPY --from=builder /app/evm-trackooor .
 
 # 复制配置文件和数据文件
-COPY --from=builder /app/config.json .
 COPY --from=builder /app/data/ ./data/
 
 # 创建目录以存储可能的输出文件

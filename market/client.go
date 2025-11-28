@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strings"
 	"sync"
@@ -55,11 +56,80 @@ type HealthResponse struct {
 
 // GraphQL响应结构体 - 根据实际响应格式修正
 type GraphQLCoinResponse struct {
-	CoinsByContractAddress []struct {
+	Price struct {
+		CurrentPrice float64 `json:"price"`
+	} `json:"price"`
+}
+
+type GraphQLTopProjectsResponse struct {
+	ContractExchanges []struct {
+		Coin struct {
+			ContractAddress string `json:"contractAddress"`
+			ChainName       string `json:"chainName"`
+		}
 		CurrentPrice *float64 `json:"currentPrice"`
-		MarketCap    *float64 `json:"marketCap"`
-		MaxSupply    *float64 `json:"maxSupply"`
-	} `json:"coinsByContractAddress"`
+		Holdings     []struct {
+			Balance *float64 `json:"balance"`
+			Holder  struct {
+				Address   string `json:"address"`
+				ChainType string `json:"chainType"`
+			} `json:"holder"`
+		} `json:"holdings"`
+	} `json:"contractExchanges"`
+}
+
+type GraphQLTokenResponse struct {
+	HolderDetail struct {
+		Coins []struct {
+			CoinId string `json:"coinId"`
+		} `json:"coins"`
+	} `json:"holderDetail"`
+}
+
+type GraphQLMonitTokenResponse struct {
+	ContractExchanges []struct {
+		Coin struct {
+			OnChainInfos []struct {
+				ChainName       string `json:"chainName"`
+				ContractAddress string `json:"contractAddress"`
+			} `json:"onChainInfos"`
+			Name string `json:"name"`
+		}
+	} `json:"contractExchanges"`
+}
+
+// HealthCheck performs a health check on the service
+func HealthCheck() (*HealthResponse, error) {
+	if BaseCoinMarketURL == "" {
+		return nil, fmt.Errorf("BaseCoinMarketURL not set")
+	}
+
+	// Create HTTP request
+	clientURL := BaseCoinMarketURL + "/health"
+	resp, err := http.Get(clientURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to perform HTTP request: %w", err)
+	}
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			log.Printf("failed to close response body: %v", err)
+		}
+	}(resp.Body)
+
+	// Check status code
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("HTTP request failed with status: %d, body: %s", resp.StatusCode, string(body))
+	}
+
+	// Decode the response
+	var health HealthResponse
+	if err := json.NewDecoder(resp.Body).Decode(&health); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &health, nil
 }
 
 // GetTokenPriceByContract fetches token price by contract address
@@ -72,13 +142,11 @@ func GetTokenPriceByContract(contractAddress string) (float64, error) {
 
 	// 创建GraphQL查询
 	query := `
-		query GetCoinsByContractAddress($contractAddress: String!) {
-			coinsByContractAddress(contractAddress: $contractAddress) {
-				currentPrice
-				marketCap
-				maxSupply
-			}
-		}
+	query MyQuery ($contractAddress: String!) {
+  price(contractAddress: $contractAddress) {
+    price
+  }
+}
 	`
 	// 创建请求对象
 	req := graphql.NewRequest(query)
@@ -94,47 +162,153 @@ func GetTokenPriceByContract(contractAddress string) (float64, error) {
 	if err := graphqlClient.Run(ctx, req, &resp); err != nil {
 		return 0, fmt.Errorf("failed to execute GraphQL query: %w", err)
 	}
-
 	// 提取价格信息
-	if len(resp.CoinsByContractAddress) == 0 {
-		return 0, fmt.Errorf("no price data found for contract address: %s", contractAddress)
+	if resp.Price.CurrentPrice <= 0 {
+		return 0, fmt.Errorf("no valid price found for contract address: %s", contractAddress)
 	}
 
-	// 返回第一个有效的价格
-	for _, coin := range resp.CoinsByContractAddress {
-		if coin.CurrentPrice != nil {
-			return *coin.CurrentPrice, nil
-		}
-	}
-
-	return 0, fmt.Errorf("no valid price found for contract address: %s", contractAddress)
+	return resp.Price.CurrentPrice, nil
 }
 
-// HealthCheck performs a health check on the service
-func HealthCheck() (*HealthResponse, error) {
-	if BaseCoinMarketURL == "" {
-		return nil, fmt.Errorf("BaseCoinMarketURL not set")
+type GraphQLTopProjectsDetailedResponse struct {
+	ContractExchanges []struct {
+		Coin struct {
+			CurrentPrice *float64 `json:"currentPrice"`
+			Holdings     []struct {
+				Balance *float64 `json:"balance"`
+				Holder  struct {
+					Address   string `json:"address"`
+					ChainType string `json:"chainType"`
+				} `json:"holder"`
+			} `json:"holdings"`
+		} `json:"coin"`
+	} `json:"contractExchanges"`
+}
+
+// 修改fetchTopProjectsAddressByChainID函数，只负责与GraphQL交互
+func fetchTopProjectsAddressByChainID(chainID string, limit int, offset int) (*GraphQLTopProjectsDetailedResponse, bool, error) {
+	initializeGraphQLClient()
+	if graphqlClient == nil {
+		return nil, false, fmt.Errorf("failed to initialize GraphQL client")
 	}
 
-	// Create HTTP request
-	clientURL := BaseCoinMarketURL + "/health"
-	resp, err := http.Get(clientURL)
-	if err != nil {
-		return nil, fmt.Errorf("failed to perform HTTP request: %w", err)
-	}
-	defer resp.Body.Close()
+	// 创建GraphQL查询 - 修复变量声明问题
+	query := `
+		query fetchTopProjectsAddressByChainID($limit: Int!, $offset: Int!) {
+			contractExchanges(exchangeId: "binance_futures", limit: $limit, offset: $offset) {
+				coin {
+					currentPrice
+					holdings {
+						balance
+						holder {
+							address
+							chainType
+						}
+					}
+				}
+			}
+		}
+	`
 
-	// Check status code
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("HTTP request failed with status: %d, body: %s", resp.StatusCode, string(body))
+	// 创建请求对象
+	req := graphql.NewRequest(query)
+	req.Var("limit", limit)
+	req.Var("offset", offset)
+
+	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	defer cancel()
+
+	// 执行查询
+	var resp GraphQLTopProjectsDetailedResponse
+	if err := graphqlClient.Run(ctx, req, &resp); err != nil {
+		return nil, false, fmt.Errorf("failed to execute GraphQL query: %w", err)
 	}
 
-	// Decode the response
-	var health HealthResponse
-	if err := json.NewDecoder(resp.Body).Decode(&health); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
+	isEnd := len(resp.ContractExchanges) < limit
+	return &resp, isEnd, nil
+}
+func fetchCoinIdByProjectAddress(projectAddress string) (string, error) {
+	initializeGraphQLClient()
+	if graphqlClient == nil {
+		return "", fmt.Errorf("failed to initialize GraphQL client")
 	}
+	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	// 创建GraphQL查询
+	query := `
+		query MyQuery ($projectAddress: String!) {
+  holderDetail(holderAddress: $projectAddress) {
+    coins {
+      coinId
+    }
+  }
+}
+	`
+	// 创建请求对象
+	req := graphql.NewRequest(query)
+	req.Var("projectAddress", projectAddress)
 
-	return &health, nil
+	// 执行查询
+	var resp GraphQLTokenResponse
+	if err := graphqlClient.Run(ctx, req, &resp); err != nil {
+		return "", fmt.Errorf("failed to execute GraphQL query: %w", err)
+	}
+	// 提取地址信息
+	if len(resp.HolderDetail.Coins) == 0 {
+		return "", fmt.Errorf("no address found for project address when invoke FetchCoinIdByProjectAddress: %s", projectAddress)
+	}
+	if len(resp.HolderDetail.Coins) == 0 {
+		return "", fmt.Errorf("no coin found for project address when invoke FetchCoinIdByProjectAddress: %s", projectAddress)
+	}
+	return resp.HolderDetail.Coins[0].CoinId, nil
+}
+
+func fetchMonitTokenAddressesByChainID(chainID string, limit int, offset int) ([]string, bool, error) {
+	initializeGraphQLClient()
+	if graphqlClient == nil {
+		return nil, false, fmt.Errorf("failed to initialize GraphQL client")
+	}
+	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	query := `
+	query FetchMonitTokenAddressesByChainID ($limit: Int!, $offset: Int!) {
+  contractExchanges(exchangeId: "binance_futures", limit: $limit, offset: $offset) {
+    coin {
+      onChainInfos {
+        chainName
+        contractAddress
+      }
+      name
+    }
+  }
+}`
+	req := graphql.NewRequest(query)
+	req.Var("limit", limit)
+	req.Var("offset", offset)
+	// 执行查询
+	var resp GraphQLMonitTokenResponse
+	if err := graphqlClient.Run(ctx, req, &resp); err != nil {
+		return nil, false, fmt.Errorf("failed to execute GraphQL query: %w", err)
+	}
+	isEnd := len(resp.ContractExchanges) < limit
+	// 提取地址信息
+	if len(resp.ContractExchanges) == 0 {
+		return nil, isEnd, nil
+	}
+	var resultAddresses []string
+	for _, coin := range resp.ContractExchanges {
+		for _, onChainInfo := range coin.Coin.OnChainInfos {
+			if onChainInfo.ChainName == chainID {
+				resultAddresses = append(resultAddresses, onChainInfo.ContractAddress)
+			}
+		}
+	}
+	if len(resultAddresses) == 0 {
+		return nil, isEnd, fmt.Errorf("no price data found for chain address: %s", chainID)
+	} else {
+		return resultAddresses, isEnd, nil
+	}
 }

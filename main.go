@@ -407,6 +407,31 @@ func loadConfigFile(filename string) {
 	} else {
 		log.Fatalf("Missing RPC URL in config file %v", filename)
 	}
+	// HTTP RPC URLs
+	if v, ok := configOptions["http_rpc_urls"]; ok {
+		rawSlice, ok := v.([]interface{})
+		if !ok {
+			panic("http_rpc_urls is not a slice")
+		}
+
+		urls := make([]string, len(rawSlice))
+		for i, u := range rawSlice {
+			urls[i], ok = u.(string)
+			if !ok {
+				panic("http_rpc_urls contains non-string element")
+			}
+		}
+
+		options.HttpRPCURLs = urls
+	} else {
+		log.Fatalf("Missing HTTP RPC URLs in config file %v, use http_rpc_urls: []string", filename)
+	}
+	// Update Nodes Chain Name
+	if v, ok := configOptions["update_nodes_chain_name"]; ok {
+		options.UpdateNodesChainName = v.(string)
+	} else {
+		log.Fatalf("Missing update_nodes_chain_name in config file %v", filename)
+	}
 
 	if v, ok := configOptions["webhook_url"]; ok {
 		options.WebHookURL = v.(string)

@@ -129,7 +129,7 @@ func InitActions(actions map[string]shared.ActionOptions) {
 	// determine whether or not we track blocks or events
 	if len(TxAddressToAction) == 0 && len(BlockActions) == 0 {
 		fmt.Printf("Auto determined to only track events\n")
-		shared.BlockTrackingRequired = false
+		shared.BlockTrackingRequired = true
 	} else {
 		fmt.Printf("Auto determined to track blocks\n")
 		shared.BlockTrackingRequired = true

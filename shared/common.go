@@ -52,11 +52,13 @@ var BlockTrackingRequired bool
 
 // config options for trackooors
 type TrackooorOptions struct {
-	RpcURL            string
-	WebHookURL        string
-	EmailAdress       string
-	FilterAddresses   []common.Address // global list of addresses to filter for
-	FilterEventTopics [][]common.Hash  // global list of event topics to filter for
+	RpcURL               string
+	HttpRPCURLs          []string
+	UpdateNodesChainName string
+	WebHookURL           string
+	EmailAdress          string
+	FilterAddresses      []common.Address // global list of addresses to filter for
+	FilterEventTopics    [][]common.Hash  // global list of event topics to filter for
 
 	AddressProperties map[common.Address]map[string]interface{} // e.g. map address to "name":"USDC"
 
