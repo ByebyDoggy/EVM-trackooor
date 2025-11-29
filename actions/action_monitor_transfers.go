@@ -2,6 +2,7 @@ package actions
 
 import (
 	"fmt"
+	"math"
 	"math/big"
 	"slices"
 	"sync"
@@ -17,16 +18,16 @@ import (
 const NULLAddress string = "0x0000000000000000000000000000000000000000"
 
 type TxTransferInfo struct {
-	TotalUSD       float64   // 累计转出金额
-	Created        time.Time // 记录第一次出现该交易的时间
-	TokenAddresses []common.Address
-	FromAddress    common.Address
-	ToAddress      common.Address
+	outUSDValue  float64   // 累计转出金额
+	Created      time.Time // 记录第一次出现该交易的时间
+	TokenAddress common.Address
+	FromAddress  common.Address
+	ToAddress    common.Address
 }
 
 var (
 	txTransferTotalsMu sync.Mutex
-	txTransferTotals   = make(map[common.Hash]TxTransferInfo)
+	txTransferTotals   = make(map[common.Hash][]TxTransferInfo)
 )
 
 func (actionInfo) InfoMonitorTransfers() actionInfo {
@@ -54,7 +55,7 @@ When a matching transfer is detected, details are printed to the console or logg
 			"0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48":{}
 		],
 		"auto-fetch-monitor-address-chain-id": "bsc",
-		"auto-fetch-monitor-token-address-chain-name": "binance-smart-chain",
+		"auto-fetch-monitor-token-chian-name": "binance-smart-chain"
 	}
 }`
 
@@ -75,13 +76,14 @@ func (p action) InitMonitorTransfers() {
 	if !ok {
 		monitoredAddresses = p.o.Addresses
 	} else {
-		monitoredAddressesStrings, err := market.GetBinanceFuturesTokenAddressList(autoFetchByChainId)
+		monitoredAddressesStrings, err := market.GetHolderAddressesByChainID(autoFetchByChainId)
 		monitoredAddresses = make([]common.Address, 0, len(monitoredAddressesStrings))
 		for _, addr := range monitoredAddressesStrings {
 			monitoredAddresses = append(monitoredAddresses, common.HexToAddress(addr))
 		}
+		monitoredAddresses = append(monitoredAddresses, common.HexToAddress(NULLAddress))
 		if err != nil {
-			panic(fmt.Sprintf("fetchTopProjectsAddressByChainID failed: %v", err))
+			panic(fmt.Sprintf("GetHolderAddressesByChainID failed: %v", err))
 		}
 	}
 	fmt.Printf("Monitor transfers: monitored %v addresses\n", len(monitoredAddresses))
@@ -95,7 +97,7 @@ func (p action) InitMonitorTransfers() {
 		erc20TokenAddressesString, err := market.GetMonitTokenAddressesByChainID(autoFetchTokenChianName)
 		erc20TokenAddresses = make([]common.Address, 0, len(erc20TokenAddressesString))
 		if err != nil {
-			panic(fmt.Sprintf("fetchTopProjectsAddressByChainID failed: %v", err))
+			panic(fmt.Sprintf("GetMonitTokenAddressesByChainID failed: %v", err))
 		}
 		for _, addr := range erc20TokenAddressesString {
 			erc20TokenAddresses = append(erc20TokenAddresses, common.HexToAddress(addr))
@@ -108,6 +110,7 @@ func (p action) InitMonitorTransfers() {
 		}
 	}
 	fmt.Printf("Monitor %v erc20TokenAddresses\n", len(erc20TokenAddresses))
+	shared.InitCache(erc20TokenAddresses)
 	for _, erc20TokenAddress := range erc20TokenAddresses {
 		addAddressEventSigAction(erc20TokenAddress, "Transfer(address,address,uint256)", handleTokenTransfer)
 	}
@@ -123,49 +126,81 @@ func (p action) InitMonitorTransfers() {
 	go func() {
 		for {
 			time.Sleep(1 * time.Second)
-
 			txTransferTotalsMu.Lock()
-			now := time.Now()
 
-			for hash, info := range txTransferTotals {
-				age := now.Sub(info.Created)
-				// 1️⃣ 超过 1 秒且净流出超过 500000 USD → 触发警报
-				if info.TotalUSD < -500000 && age > time.Second {
-					var exploiterAddress common.Address
-					var attackedAddress common.Address
-					if slices.Contains(monitoredAddresses, info.FromAddress) {
-						exploiterAddress = info.ToAddress
-						attackedAddress = info.FromAddress
-					} else {
-						exploiterAddress = info.FromAddress
-						attackedAddress = info.ToAddress
-					}
-					fmtMessage := fmt.Sprintf("🚨 ALERT: Address %v is attacked by exploiterAddress %v Tx %v net outflow %.2f USD (created %v, %v ago)",
-						attackedAddress.Hex(), exploiterAddress.Hex(), hash.Hex(), info.TotalUSD, info.Created.Format(time.RFC3339),
-						age.Round(time.Millisecond))
-					fmt.Printf(fmtMessage)
-					// 根据holderAddress查找到代币地址
-					var coinId string
-					if attackedAddress.Hex() != NULLAddress {
-						coinId, err = market.GetCoinIdByProjectAddress(attackedAddress.Hex())
-						if err != nil {
-							fmt.Printf("Failed to fetch coinId for address %v: %v\n", attackedAddress.Hex(), err)
-							continue
-						}
-					} else {
-						coinId = info.TokenAddresses[0].Hex()
-					}
-					fmt.Printf("CoinId for address %v is %v\n", attackedAddress.Hex(), coinId)
-					notify.SendMessage(
-						notify.NewUnifiedMessage("transfers", fmtMessage, coinId))
-					delete(txTransferTotals, hash)
+			for hash, transferTxs := range txTransferTotals {
+				if len(transferTxs) <= 0 {
 					continue
 				}
+				// 计算转账总数量
+
+				totalOutUSD := float64(0.0)
+				senderAddress := transferTxs[0].FromAddress
+				receiverAddress := transferTxs[0].ToAddress
+				createdTime := transferTxs[0].Created
+				age := time.Since(createdTime)
 
 				// 2️⃣ 超时清理：超过 5 分钟未触发警报的交易自动删除
 				if age > 5*time.Minute {
 					delete(txTransferTotals, hash)
 				}
+
+				for _, info := range transferTxs {
+					multiplier := 0
+					if info.FromAddress == senderAddress {
+						multiplier = 1
+					} else {
+						multiplier = -1
+					}
+					totalOutUSD += info.outUSDValue * float64(multiplier)
+
+				}
+
+				// 判断是否是被监控地址发起的转账
+				var exploiterAddress common.Address
+				var attackedAddress common.Address
+				// 1️⃣ 超过 1 秒且净流出超过 500000 USD → 触发警报
+				if totalOutUSD > 500000 && slices.Contains(monitoredAddresses, senderAddress) {
+					exploiterAddress = receiverAddress
+					attackedAddress = senderAddress
+				} else if totalOutUSD < -500000 && slices.Contains(monitoredAddresses, receiverAddress) {
+					exploiterAddress = senderAddress
+					attackedAddress = receiverAddress
+				} else {
+					continue
+				}
+
+				fmtMessage := fmt.Sprintf("🚨 ALERT: Address %v is attacked by exploiterAddress %v Tx %v net outflow %.2f USD (created %v)",
+					attackedAddress.Hex(), exploiterAddress.Hex(), hash.Hex(), math.Abs(totalOutUSD), createdTime.Format(time.RFC3339))
+				fmt.Printf(fmtMessage)
+				var coinId string
+				for _, transferTx := range transferTxs {
+					addr := transferTx.TokenAddress
+					coinId, err = market.TokenContractAddressToCoinId(addr)
+					if err != nil {
+						fmt.Printf("Failed to fetch coinId for address %v: %v\n", addr.Hex(), err)
+						continue
+					}
+					fmt.Printf("CoinId for address %v is %v\n", attackedAddress.Hex(), coinId)
+
+				}
+				tokenInfos := make([]notify.TokenInfo, 0, len(transferTxs))
+				for _, transferTx := range transferTxs {
+					coinId, err = market.TokenContractAddressToCoinId(transferTx.TokenAddress)
+					if err != nil {
+						fmt.Printf("Failed to fetch coinId for address %v: %v\n", transferTx.TokenAddress.Hex(), err)
+						continue
+					}
+					erc20Info := shared.RetrieveERC20Info(transferTx.TokenAddress)
+					tokenInfos = append(tokenInfos, notify.TokenInfo{
+						TokenAddress: transferTx.TokenAddress.Hex(),
+						TokenSymbol:  erc20Info.Symbol,
+						TokenName:    erc20Info.Name,
+					})
+				}
+				notify.SendMessage(
+					notify.NewUnifiedMessage("transfers", fmtMessage, tokenInfos))
+				delete(txTransferTotals, hash)
 			}
 
 			txTransferTotalsMu.Unlock()
@@ -193,43 +228,40 @@ func handleTokenTransfer(p ActionEventData) {
 	from := p.DecodedTopics["from"].(common.Address)
 	to := p.DecodedTopics["to"].(common.Address)
 	value := p.DecodedData["value"].(*big.Int)
-	// erc20 transfer is from an address we're monitoring
-	isSender := slices.Contains(monitoredAddresses, from)
-	isReceiver := slices.Contains(monitoredAddresses, to)
-	if isSender || isReceiver {
-		// get erc20 token info (to format value decimals + symbol)
-		token := p.EventLog.Address
-		tokenInfo := shared.RetrieveERC20Info(token)
-		decimals := tokenInfo.Decimals
-		symbol := tokenInfo.Symbol
-		hash := p.EventLog.TxHash
-		// alert
-		if price, err := market.TokenPriceInUSD(token); err == nil {
-			// Convert the value to a float64 for price calculation
-			valueFloat := utils.FormatDecimalsToFloat(value, decimals)
-			totalValue := price * valueFloat
-			entry, exists := txTransferTotals[hash]
-			if !exists { // 没有就初始化
-				entry = TxTransferInfo{
-					TotalUSD:       0,
-					Created:        time.Now(),
-					TokenAddresses: []common.Address{token},
-					FromAddress:    from,
-					ToAddress:      to,
-				}
-			}
-			if isSender {
-				entry.TotalUSD -= totalValue
-			}
-			if isReceiver {
-				entry.TotalUSD += totalValue
-			}
-			txTransferTotalsMu.Lock()
-			defer txTransferTotalsMu.Unlock()
-			txTransferTotals[hash] = entry
-			//fmt.Printf("ERC20 Transfer from %v to %v with value %v %v (%.2f)USD in tx %v\n", from, to, utils.FormatDecimals(value, decimals), symbol, totalValue, hash.Hex())
-		} else {
-			fmt.Printf("ERC20 Transfer from %v to %v with value %v %v (price err: %v) in tx %v\n", from, to, utils.FormatDecimals(value, decimals), symbol, err, hash.Hex())
+	// get erc20 token info (to format value decimals + symbol)
+	token := p.EventLog.Address
+	tokenInfo := shared.RetrieveERC20Info(token)
+	decimals := tokenInfo.Decimals
+	symbol := tokenInfo.Symbol
+	hash := p.EventLog.TxHash
+
+	// 若symbol非ASCII字符，跳过
+	if !utils.IsASCII(symbol) {
+		//fmt.Printf("Non-ASCII symbol %v for token %v, skipping\n", symbol, token.Hex())
+		return
+	}
+
+	// alert
+	if price, err := market.TokenPriceInUSD(token); err == nil {
+		// Convert the value to a float64 for price calculation
+		valueFloat := utils.FormatDecimalsToFloat(value, decimals)
+		totalValue := price * valueFloat
+		txTransferTotalsMu.Lock()
+		entry, exists := txTransferTotals[hash]
+		if !exists { // 没有就初始化
+			entry = []TxTransferInfo{}
 		}
+		entry = append(entry, TxTransferInfo{
+			outUSDValue:  totalValue,
+			Created:      time.Now(),
+			TokenAddress: token,
+			FromAddress:  from,
+			ToAddress:    to,
+		})
+		txTransferTotals[hash] = entry
+		txTransferTotalsMu.Unlock()
+		//fmt.Printf("ERC20 Transfer from %v to %v with value %v %v (%.2f)USD in tx %v\n", from, to, utils.FormatDecimals(value, decimals), symbol, totalValue, hash.Hex())
+	} else {
+		fmt.Printf("ERC20 Transfer from %v to %v with value %v %v (price err: %v) in tx %v\n", from, to, utils.FormatDecimals(value, decimals), symbol, err, hash.Hex())
 	}
 }

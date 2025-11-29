@@ -55,6 +55,7 @@ type TrackooorOptions struct {
 	RpcURL               string
 	HttpRPCURLs          []string
 	UpdateNodesChainName string
+	FilterEventInterval  int64 // 过滤事件的时间间隔，单位为区块数，默认值为100
 	WebHookURL           string
 	EmailAdress          string
 	FilterAddresses      []common.Address // global list of addresses to filter for

@@ -29,8 +29,10 @@ type WrappedClient struct {
 var WrappedClientInstance *WrappedClient
 
 const (
-	failThreshold = 2               // 5 次失败
-	failWindow    = 5 * time.Minute // 5 分钟
+	failThreshold    = 2                      // 2次失败禁用节点
+	failWindow       = 5 * time.Minute        // 5分钟失败窗口
+	singleReqTimeout = 10 * time.Second       // 单次节点请求超时时间
+	retryBackoffBase = 500 * time.Millisecond // 基础重试间隔
 )
 
 // 初始化客户端
@@ -58,6 +60,39 @@ func NewWrappedClient(nodeURLs []string) {
 			time.Sleep(30 * time.Minute)
 		}
 	}()
+
+	// 新增：后台协程定期重置禁用节点（避免永久禁用）
+	go resetDisabledNodes()
+}
+
+// 定期重置超过failWindow的禁用节点
+func resetDisabledNodes() {
+	ticker := time.NewTicker(failWindow)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		WrappedClientInstance.mu.Lock()
+		now := time.Now()
+		for _, h := range WrappedClientInstance.health {
+			if !h.disabled {
+				continue
+			}
+			// 清理过期失败记录
+			newFailTimes := []time.Time{}
+			for _, t := range h.failTimes {
+				if now.Sub(t) <= failWindow {
+					newFailTimes = append(newFailTimes, t)
+				}
+			}
+			h.failTimes = newFailTimes
+			// 失败次数低于阈值则恢复节点
+			if len(h.failTimes) < failThreshold {
+				h.disabled = false
+				//log.Printf("[NodeHealth] Node #%d (%s) re-enabled after fail window", idx, WrappedClientInstance.nodes[idx])
+			}
+		}
+		WrappedClientInstance.mu.Unlock()
+	}
 }
 
 // 随机选择一个健康节点客户端
@@ -104,12 +139,33 @@ func GetRandomClient() (client *ethclient.Client, idx int) {
 	return
 }
 
-// FilterLogs 带节点切换 + 日志打印 + 节点健康管理
+// 自定义超时错误类型
+var ErrFilterLogsTimeout = fmt.Errorf("filter logs request timeout")
+
+// FilterLogs 带节点切换 + 日志打印 + 节点健康管理 + 超时控制
+// 新增超时保护，避免goroutine阻塞，优化重试逻辑
 func FilterLogs(ctx context.Context, query ethereum.FilterQuery) (logs []types.Log, err error) {
 	maxRetries := len(WrappedClientInstance.clients)
+	if maxRetries == 0 {
+		return nil, fmt.Errorf("no available eth clients")
+	}
+
 	tried := make(map[int]bool)
+	lastErr := error(nil)
+
+	// 1. 为整体请求添加超时控制（总超时 = 节点数 × 单次超时 + 缓冲时间）
+	totalTimeout := time.Duration(maxRetries)*singleReqTimeout + 2*time.Second
+	ctx, cancel := context.WithTimeout(ctx, totalTimeout)
+	defer cancel() // 确保上下文最终关闭，释放资源
 
 	for attempt := 0; attempt < maxRetries; attempt++ {
+		// 检查上下文是否已超时/取消，提前退出
+		select {
+		case <-ctx.Done():
+			return nil, fmt.Errorf("%w: %v", ErrFilterLogsTimeout, ctx.Err())
+		default:
+		}
+
 		client, idx := GetRandomClient()
 		if tried[idx] {
 			continue
@@ -118,18 +174,28 @@ func FilterLogs(ctx context.Context, query ethereum.FilterQuery) (logs []types.L
 
 		//log.Printf("[FilterLogs] Using node #%d (%s)", idx, WrappedClientInstance.nodes[idx])
 
-		logs, err = client.FilterLogs(ctx, query)
+		// 2. 为单次节点请求添加独立超时，避免单个节点卡死
+		reqCtx, reqCancel := context.WithTimeout(ctx, singleReqTimeout)
+		logs, err = client.FilterLogs(reqCtx, query)
+		reqCancel() // 立即释放单次请求上下文，避免泄露
+
 		if err == nil {
 			//log.Printf("[FilterLogs] Success: found %d logs", len(logs))
 			return logs, nil
 		}
 
+		// 记录最后一次错误
+		lastErr = err
 		//log.Printf("[FilterLogs] Error from node #%d: %v", idx, err)
+
 		markNodeFail(idx)
-		time.Sleep(500 * time.Millisecond) // 避免瞬间重复请求
+
+		// 3. 退避策略：重试间隔随失败次数递增，避免高频重试
+		backoff := retryBackoffBase * time.Duration(attempt+1)
+		time.Sleep(backoff)
 	}
 
-	return nil, fmt.Errorf("all nodes failed, last error: %v", err)
+	return nil, fmt.Errorf("all %d nodes failed, last error: %v", maxRetries, lastErr)
 }
 
 // 记录节点失败

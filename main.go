@@ -432,6 +432,12 @@ func loadConfigFile(filename string) {
 	} else {
 		log.Fatalf("Missing update_nodes_chain_name in config file %v", filename)
 	}
+	// Filter Event Interval
+	if v, ok := configOptions["filter_event_interval"]; ok {
+		options.FilterEventInterval = int64(v.(float64))
+	} else {
+		options.FilterEventInterval = 100
+	}
 
 	if v, ok := configOptions["webhook_url"]; ok {
 		options.WebHookURL = v.(string)

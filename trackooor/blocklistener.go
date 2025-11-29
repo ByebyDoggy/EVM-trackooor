@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"log/slog"
+	"math/big"
 	"time"
 
 	"github.com/Zellic/EVM-trackooor/actions"
@@ -18,12 +19,23 @@ import (
 	"github.com/schollz/progressbar/v3"
 )
 
+var lastProcessBlockNumber big.Int
+
 // handles all events emitted in a given block,
 func handleEventsFromBlock(block *types.Block, contracts []common.Address) {
 	// blockHash := block.Hash()
+	// 限定间隔一定区块进行一次事件查询，若为间隔，直接返回
+	// 若当前区块号与上一次处理的区块号间隔小于等于指定值，则直接返回
+	interval := big.NewInt(int64(shared.Options.FilterEventInterval))
+	if block.Number().Sub(block.Number(), interval).Cmp(&lastProcessBlockNumber) <= 0 {
+		return
+	}
+	log.Printf("Processing block %d\n filter from block %d\n", block.Number(), block.Number().Sub(block.Number(), interval))
+	// 更新上一次处理的区块号为当前区块号
+	lastProcessBlockNumber = *block.Number()
 	query := ethereum.FilterQuery{
 		// BlockHash: &blockHash,
-		FromBlock: block.Number(),
+		FromBlock: block.Number().Sub(block.Number(), interval),
 		ToBlock:   block.Number(),
 		Addresses: contracts,
 		Topics:    shared.Options.FilterEventTopics,
@@ -131,7 +143,7 @@ func handleBlock(block *types.Block) {
 		shared.Infof(slog.Default(), "No event actions enabled - not handling")
 	} else {
 		actions.ActionMapMutex.RUnlock()
-		go handleEventsFromBlock(block, shared.Options.FilterAddresses)
+		handleEventsFromBlock(block, shared.Options.FilterAddresses)
 	}
 
 	// do tx post processing

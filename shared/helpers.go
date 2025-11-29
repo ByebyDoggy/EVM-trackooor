@@ -134,16 +134,22 @@ func BytesToHex(data interface{}) (string, error) {
 }
 
 func RetrieveERC20Info(tokenAddress common.Address) ERC20Info {
-	var erc20Info ERC20Info
+	// First check the persistent cache
+	if info, exists := GetERC20InfoFromCache(tokenAddress); exists {
+		return info
+	}
 
-	// check if we already fetch the info. if so, returned the cached info
+	// Then check the existing temporary cache
 	ERC20TokenInfosMutex.RLock()
 	if v, ok := ERC20TokenInfos[tokenAddress]; ok {
 		ERC20TokenInfosMutex.RUnlock()
+		// Add to persistent cache for future use
+		SetERC20InfoInCache(tokenAddress, v)
 		return v
 	}
 	ERC20TokenInfosMutex.RUnlock()
 
+	// If not in either cache, fetch from blockchain
 	tokenInstance, err := IERC20Metadata.NewIERC20Metadata(tokenAddress, Client)
 	if err != nil {
 		log.Fatal(err)
@@ -169,15 +175,20 @@ func RetrieveERC20Info(tokenAddress common.Address) ERC20Info {
 	Infof(slog.Default(), "Retrieved token decimals '%v'\n", tokenDecimals)
 	Infof(slog.Default(), "Retrieved token symbol '%v'\n", tokenSymbol)
 
+	var erc20Info ERC20Info
 	erc20Info.Name = tokenName
 	erc20Info.Symbol = tokenSymbol
 	erc20Info.Decimals = tokenDecimals
 	erc20Info.Address = tokenAddress
 
-	// cache to ERC20TokenInfos mapping so we don't retrieve again
+	// Cache in both caches
+	// 1. Existing temporary cache
 	ERC20TokenInfosMutex.Lock()
 	ERC20TokenInfos[tokenAddress] = erc20Info
 	ERC20TokenInfosMutex.Unlock()
+
+	// 2. New persistent cache
+	SetERC20InfoInCache(tokenAddress, erc20Info)
 
 	return erc20Info
 }

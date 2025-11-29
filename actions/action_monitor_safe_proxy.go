@@ -10,7 +10,6 @@ import (
 
 	"encoding/hex"
 
-	"github.com/Zellic/EVM-trackooor/notify"
 	"github.com/Zellic/EVM-trackooor/shared"
 	"github.com/Zellic/EVM-trackooor/utils"
 	"github.com/ethereum/go-ethereum/common"
@@ -191,9 +190,9 @@ func analyzeSafeLog(l types.Log) {
 	fmt.Printf("[SAFE] Detected Event: %s (Contract: %s, TxHash: %s, LogIndex: %d)\n",
 		eventMeta.Name, l.Address.Hex(), l.TxHash.Hex(), l.Index)
 	if shared.EnableWebhookNotifications || shared.EnableEmailNotifications {
-		notify.SendMessage(
-			notify.NewUnifiedMessage("safe_proxy", fmt.Sprintf("[SAFE] Detected Event: %s (Contract: %s, TxHash: %s, LogIndex: %d)",
-				eventMeta.Name, l.Address.Hex(), l.TxHash.Hex(), l.Index), l.Address.Hex()))
+		//notify.SendMessage(
+		//	notify.NewUnifiedMessage("safe_proxy", fmt.Sprintf("[SAFE] Detected Event: %s (Contract: %s, TxHash: %s, LogIndex: %d)",
+		//		eventMeta.Name, l.Address.Hex(), l.TxHash.Hex(), l.Index), l.Address.Hex()))
 	}
 	// 4. 解析参数（修复：区分indexed/非indexed存储位置）
 	topicsIndex := 1 // Topics[0]是事件签名，索引参数从Topics[1]开始

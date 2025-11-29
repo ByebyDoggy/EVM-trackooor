@@ -312,3 +312,119 @@ func fetchMonitTokenAddressesByChainID(chainID string, limit int, offset int) ([
 		return resultAddresses, isEnd, nil
 	}
 }
+
+type HTTPFetchPriceByContractResponse struct {
+	ContractAddresses string  `json:"contract_address"`
+	CoinId            string  `json:"coin_id"`
+	Price             float64 `json:"price"`
+}
+
+type HTTPFetchContractAddressByExchangeTypeResponseItem struct {
+	ContractAddress string `json:"contract_address"`
+	ChainName       string `json:"chain_name"`
+}
+
+// 通过HTTP请求获取代币价格
+func fetchTokenPriceByContractHTTP(contractAddress string) (string, float64, error) {
+	if BaseCoinMarketURL == "" {
+		return "", 0, fmt.Errorf("BaseCoinMarketURL not set")
+	}
+	quickSearchPrefix := BaseCoinMarketURL + "/quick-search"
+	// 构建请求URL
+	url := fmt.Sprintf("%s/price/%s", quickSearchPrefix, contractAddress)
+
+	// 创建HTTP请求
+	resp, err := http.Get(url)
+	if err != nil {
+		return "", 0, fmt.Errorf("failed to perform HTTP request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// 检查状态码
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return "", 0, fmt.Errorf("HTTP request failed with status: %d, body: %s", resp.StatusCode, string(body))
+	}
+
+	// 解析响应
+	var response HTTPFetchPriceByContractResponse
+	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+		return "", 0, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	// 返回价格
+	if response.Price <= 0 {
+		return "", 0, fmt.Errorf("invalid price received: %f", response.Price)
+	}
+
+	return response.CoinId, response.Price, nil
+}
+
+// 通过HTTP请求获取指定交易所的代币地址列表
+func fetchMonitTokenAddressesByExchangeIDHTTP(exchangeID string, chain_name string) ([]string, error) {
+	if BaseCoinMarketURL == "" {
+		return nil, fmt.Errorf("BaseCoinMarketURL not set")
+	}
+	quickSearchPrefix := BaseCoinMarketURL + "/quick-search"
+	// 构建请求URL
+	url := fmt.Sprintf("%s/exchange/%s", quickSearchPrefix, exchangeID)
+
+	// 创建HTTP请求
+	resp, err := http.Get(url)
+	if err != nil {
+		return nil, fmt.Errorf("failed to perform HTTP request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// 检查状态码
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("HTTP request failed with status: %d, body: %s", resp.StatusCode, string(body))
+	}
+	var contractList []HTTPFetchContractAddressByExchangeTypeResponseItem
+	// 解析响应
+	if err := json.NewDecoder(resp.Body).Decode(&contractList); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	// 提取合约地址
+	var resultAddresses []string
+	for _, contract := range contractList {
+		if contract.ChainName == chain_name {
+			resultAddresses = append(resultAddresses, contract.ContractAddress)
+		}
+	}
+
+	return resultAddresses, nil
+}
+
+// 通过HTTP请求获取指定链的顶级持有者地址
+func fetchTopHoldersAddressByChainIDHTTP(chainID string) ([]string, error) {
+	if BaseCoinMarketURL == "" {
+		return nil, fmt.Errorf("BaseCoinMarketURL not set")
+	}
+	quickSearchPrefix := BaseCoinMarketURL + "/quick-search"
+	// 构建请求URL
+	url := fmt.Sprintf("%s/top-holders/%s", quickSearchPrefix, chainID)
+
+	// 创建HTTP请求
+	resp, err := http.Get(url)
+	if err != nil {
+		return nil, fmt.Errorf("failed to perform HTTP request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// 检查状态码
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("HTTP request failed with status: %d, body: %s", resp.StatusCode, string(body))
+	}
+
+	// 解析响应
+	var addresses []string
+	if err := json.NewDecoder(resp.Body).Decode(&addresses); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return addresses, nil
+}

@@ -198,3 +198,18 @@ func FormatDecimalsToFloat(n *big.Int, decimals uint8) float64 {
 
 	return nFloat / divisorFloat
 }
+
+func IsASCII(str string) bool {
+	// Check if the string is empty
+	if len(str) == 0 {
+		return true
+	}
+
+	// Check each character
+	for _, char := range str {
+		if char > 127 {
+			return false
+		}
+	}
+	return true
+}
